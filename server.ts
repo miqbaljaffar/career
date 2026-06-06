@@ -3,6 +3,8 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import prisma from "./src/lib/prisma";
+import fs from "fs";
 
 dotenv.config();
 
@@ -569,202 +571,790 @@ model Notification {
 // ==========================================
 
 // Auth and User Profile Routes
-app.get("/api/profile", (req, res) => {
-  res.json(db.currentUser);
-});
-
-app.post("/api/profile/update", (req, res) => {
-  db.currentUser = { ...db.currentUser, ...req.body };
-  res.json({ success: true, user: db.currentUser });
-});
-
-app.post("/api/profile/skills/add", (req, res) => {
-  const { skill } = req.body;
-  if (skill && !db.currentUser.skills.includes(skill)) {
-    db.currentUser.skills.push(skill);
+app.get("/api/profile", async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: "user_sarah_tan" },
+      include: {
+        education: true,
+        experience: true,
+        portfolio: true
+      }
+    });
+    if (user) {
+      const formattedUser = {
+        ...user,
+        socials: user.socials || {},
+        education: user.education,
+        experience: user.experience,
+        portfolio: user.portfolio
+      };
+      return res.json(formattedUser);
+    }
+    res.json(db.currentUser);
+  } catch (err) {
+    res.json(db.currentUser);
   }
-  res.json({ success: true, skills: db.currentUser.skills });
 });
 
-app.post("/api/profile/skills/remove", (req, res) => {
+app.post("/api/profile/update", async (req, res) => {
+  try {
+    const userId = "user_sarah_tan";
+    
+    if (req.body.experience) {
+      await prisma.experience.deleteMany({ where: { userId } });
+      await prisma.experience.createMany({
+        data: req.body.experience.map((e: any) => ({
+          id: e.id,
+          userId,
+          company: e.company,
+          role: e.role,
+          location: e.location,
+          startDate: e.startDate,
+          endDate: e.endDate,
+          description: e.description
+        }))
+      });
+    }
+
+    if (req.body.portfolio) {
+      await prisma.portfolio.deleteMany({ where: { userId } });
+      await prisma.portfolio.createMany({
+        data: req.body.portfolio.map((p: any) => ({
+          id: p.id,
+          userId,
+          title: p.title,
+          description: p.description,
+          techStack: p.techStack,
+          imageUrl: p.imageUrl,
+          liveUrl: p.liveUrl || null,
+          githubUrl: p.githubUrl || null,
+          status: p.status
+        }))
+      });
+    }
+
+    if (req.body.education) {
+      await prisma.education.deleteMany({ where: { userId } });
+      await prisma.education.createMany({
+        data: req.body.education.map((e: any) => ({
+          id: e.id,
+          userId,
+          school: e.school,
+          degree: e.degree,
+          fieldOfStudy: e.fieldOfStudy,
+          startYear: e.startYear,
+          endYear: e.endYear
+        }))
+      });
+    }
+
+    const updateData: any = {};
+    const scalarFields = [
+      'fullName', 'email', 'headline', 'about', 'location', 'avatar',
+      'coverBanner', 'skills', 'languages', 'isPremium', 'githubUsername', 'profileStrength',
+      'certifications', 'achievements', 'socials'
+    ];
+    for (const field of scalarFields) {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      include: {
+        education: true,
+        experience: true,
+        portfolio: true
+      }
+    });
+
+    const formattedUser = {
+      ...updated,
+      socials: updated.socials || {},
+      education: updated.education,
+      experience: updated.experience,
+      portfolio: updated.portfolio
+    };
+
+    res.json({ success: true, user: formattedUser });
+  } catch (err) {
+    db.currentUser = { ...db.currentUser, ...req.body };
+    res.json({ success: true, user: db.currentUser });
+  }
+});
+
+app.post("/api/profile/skills/add", async (req, res) => {
   const { skill } = req.body;
-  db.currentUser.skills = db.currentUser.skills.filter(s => s !== skill);
-  res.json({ success: true, skills: db.currentUser.skills });
+  try {
+    if (skill) {
+      const user = await prisma.user.findUnique({ where: { id: "user_sarah_tan" } });
+      if (user && !user.skills.includes(skill)) {
+        const updated = await prisma.user.update({
+          where: { id: "user_sarah_tan" },
+          data: {
+            skills: {
+              set: [...user.skills, skill]
+            }
+          }
+        });
+        return res.json({ success: true, skills: updated.skills });
+      }
+    }
+    const user = await prisma.user.findUnique({ where: { id: "user_sarah_tan" } });
+    res.json({ success: true, skills: user?.skills || [] });
+  } catch (err) {
+    if (skill && !db.currentUser.skills.includes(skill)) {
+      db.currentUser.skills.push(skill);
+    }
+    res.json({ success: true, skills: db.currentUser.skills });
+  }
+});
+
+app.post("/api/profile/skills/remove", async (req, res) => {
+  const { skill } = req.body;
+  try {
+    const user = await prisma.user.findUnique({ where: { id: "user_sarah_tan" } });
+    if (user) {
+      const updated = await prisma.user.update({
+        where: { id: "user_sarah_tan" },
+        data: {
+          skills: {
+            set: user.skills.filter(s => s !== skill)
+          }
+        }
+      });
+      return res.json({ success: true, skills: updated.skills });
+    }
+    res.json({ success: true, skills: [] });
+  } catch (err) {
+    db.currentUser.skills = db.currentUser.skills.filter(s => s !== skill);
+    res.json({ success: true, skills: db.currentUser.skills });
+  }
 });
 
 // Social Feed Routes
-app.get("/api/posts", (req, res) => {
-  // Sort posts by date descending
-  const sorted = [...db.posts].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  res.json(sorted);
-});
+app.get("/api/posts", async (req, res) => {
+  try {
+    const posts = await prisma.post.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: true,
+        likes: true,
+        comments: {
+          include: {
+            user: true
+          },
+          orderBy: { createdAt: 'asc' }
+        }
+      }
+    });
 
-app.post("/api/posts/create", (req, res) => {
-  const { content, imageUrl } = req.body;
-  const newPost = {
-    id: `post_${Date.now()}`,
-    userId: db.currentUser.id,
-    userName: db.currentUser.fullName,
-    userHeadline: db.currentUser.headline,
-    userAvatar: db.currentUser.avatar,
-    content,
-    imageUrl: imageUrl || undefined,
-    createdAt: new Date().toISOString(),
-    likes: [],
-    repostCount: 0,
-    comments: []
-  };
-  db.posts.unshift(newPost);
-  res.json({ success: true, post: newPost });
-});
-
-app.post("/api/posts/:id/like", (req, res) => {
-  const { id } = req.params;
-  const post = db.posts.find(p => p.id === id);
-  if (post) {
-    const isLiked = post.likes.includes(db.currentUser.id);
-    if (isLiked) {
-      post.likes = post.likes.filter(uid => uid !== db.currentUser.id);
-    } else {
-      post.likes.push(db.currentUser.id);
-    }
-    return res.json({ success: true, likes: post.likes });
+    const formattedPosts = posts.map(p => ({
+      id: p.id,
+      userId: p.userId,
+      userName: p.user.fullName,
+      userHeadline: p.user.headline,
+      userAvatar: p.user.avatar || '',
+      content: p.content,
+      imageUrl: p.imageUrl || undefined,
+      videoUrl: p.videoUrl || undefined,
+      createdAt: p.createdAt.toISOString(),
+      likes: p.likes.map(l => l.userId),
+      repostCount: p.repostCount,
+      comments: p.comments.map(c => ({
+        id: c.id,
+        userId: c.userId,
+        userName: c.user.fullName,
+        userAvatar: c.user.avatar || '',
+        userHeadline: c.user.headline,
+        content: c.content,
+        createdAt: c.createdAt.toISOString()
+      }))
+    }));
+    res.json(formattedPosts);
+  } catch (err) {
+    const sorted = [...db.posts].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json(sorted);
   }
-  res.status(404).json({ error: "Post not found" });
 });
 
-app.post("/api/posts/:id/comment", (req, res) => {
-  const { id } = req.params;
-  const { content } = req.body;
-  const post = db.posts.find(p => p.id === id);
-  if (post && content) {
-    const newComment = {
-      id: `comment_${Date.now()}`,
+app.post("/api/posts/create", async (req, res) => {
+  const { content, imageUrl } = req.body;
+  try {
+    const newPost = await prisma.post.create({
+      data: {
+        userId: "user_sarah_tan",
+        content,
+        imageUrl: imageUrl || null
+      },
+      include: {
+        user: true
+      }
+    });
+
+    res.json({
+      success: true,
+      post: {
+        id: newPost.id,
+        userId: newPost.userId,
+        userName: newPost.user.fullName,
+        userHeadline: newPost.user.headline,
+        userAvatar: newPost.user.avatar || '',
+        content: newPost.content,
+        imageUrl: newPost.imageUrl || undefined,
+        createdAt: newPost.createdAt.toISOString(),
+        likes: [],
+        repostCount: 0,
+        comments: []
+      }
+    });
+  } catch (err) {
+    const newPost = {
+      id: `post_${Date.now()}`,
       userId: db.currentUser.id,
       userName: db.currentUser.fullName,
-      userAvatar: db.currentUser.avatar,
       userHeadline: db.currentUser.headline,
+      userAvatar: db.currentUser.avatar,
       content,
-      createdAt: new Date().toISOString()
+      imageUrl: imageUrl || undefined,
+      createdAt: new Date().toISOString(),
+      likes: [],
+      repostCount: 0,
+      comments: []
     };
-    post.comments.push(newComment);
-    return res.json({ success: true, comment: newComment, comments: post.comments });
+    db.posts.unshift(newPost);
+    res.json({ success: true, post: newPost });
   }
-  res.status(404).json({ error: "Post not found or content vacant" });
+});
+
+app.post("/api/posts/:id/like", async (req, res) => {
+  const { id } = req.params;
+  const userId = "user_sarah_tan";
+  try {
+    const existingLike = await prisma.postLike.findUnique({
+      where: {
+        postId_userId: { postId: id, userId }
+      }
+    });
+
+    if (existingLike) {
+      await prisma.postLike.delete({
+        where: {
+          postId_userId: { postId: id, userId }
+        }
+      });
+    } else {
+      await prisma.postLike.create({
+        data: { postId: id, userId }
+      });
+    }
+
+    const updatedLikes = await prisma.postLike.findMany({
+      where: { postId: id }
+    });
+    res.json({ success: true, likes: updatedLikes.map(l => l.userId) });
+  } catch (err) {
+    const post = db.posts.find(p => p.id === id);
+    if (post) {
+      const isLiked = post.likes.includes(db.currentUser.id);
+      if (isLiked) {
+        post.likes = post.likes.filter(uid => uid !== db.currentUser.id);
+      } else {
+        post.likes.push(db.currentUser.id);
+      }
+      return res.json({ success: true, likes: post.likes });
+    }
+    res.status(404).json({ error: "Post not found" });
+  }
+});
+
+app.post("/api/posts/:id/comment", async (req, res) => {
+  const { id } = req.params;
+  const { content } = req.body;
+  if (!content) return res.status(400).json({ error: "Content empty" });
+
+  try {
+    const newComment = await prisma.comment.create({
+      data: {
+        postId: id,
+        userId: "user_sarah_tan",
+        content
+      },
+      include: {
+        user: true
+      }
+    });
+
+    const allComments = await prisma.comment.findMany({
+      where: { postId: id },
+      include: { user: true },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    res.json({
+      success: true,
+      comment: {
+        id: newComment.id,
+        userId: newComment.userId,
+        userName: newComment.user.fullName,
+        userAvatar: newComment.user.avatar || '',
+        userHeadline: newComment.user.headline,
+        content: newComment.content,
+        createdAt: newComment.createdAt.toISOString()
+      },
+      comments: allComments.map(c => ({
+        id: c.id,
+        userId: c.userId,
+        userName: c.user.fullName,
+        userAvatar: c.user.avatar || '',
+        userHeadline: c.user.headline,
+        content: c.content,
+        createdAt: c.createdAt.toISOString()
+      }))
+    });
+  } catch (err) {
+    const post = db.posts.find(p => p.id === id);
+    if (post) {
+      const newComment = {
+        id: `comment_${Date.now()}`,
+        userId: db.currentUser.id,
+        userName: db.currentUser.fullName,
+        userAvatar: db.currentUser.avatar,
+        userHeadline: db.currentUser.headline,
+        content,
+        createdAt: new Date().toISOString()
+      };
+      post.comments.push(newComment);
+      return res.json({ success: true, comment: newComment, comments: post.comments });
+    }
+    res.status(404).json({ error: "Post not found" });
+  }
 });
 
 // Professional Connections/Networking Routes
-app.get("/api/connections", (req, res) => {
-  res.json(db.connections);
+app.get("/api/connections", async (req, res) => {
+  try {
+    const allUsers = await prisma.user.findMany({
+      where: {
+        id: { not: "user_sarah_tan" }
+      }
+    });
+
+    const connections = await prisma.connection.findMany({
+      where: {
+        OR: [
+          { senderId: "user_sarah_tan" },
+          { receiverId: "user_sarah_tan" }
+        ]
+      }
+    });
+
+    const formattedConnections = allUsers.map((u, index) => {
+      const conn = connections.find(c =>
+        (c.senderId === "user_sarah_tan" && c.receiverId === u.id) ||
+        (c.receiverId === "user_sarah_tan" && c.senderId === u.id)
+      );
+
+      let status: 'Connected' | 'PendingIncoming' | 'PendingOutgoing' | 'None' = 'None';
+      if (conn) {
+        if (conn.status === 'ACCEPTED') {
+          status = 'Connected';
+        } else if (conn.status === 'PENDING') {
+          if (conn.senderId === "user_sarah_tan") {
+            status = 'PendingOutgoing';
+          } else {
+            status = 'PendingIncoming';
+          }
+        }
+      }
+
+      return {
+        id: conn?.id || `mock_conn_id_${u.id}`,
+        userId: u.id,
+        fullName: u.fullName,
+        headline: u.headline,
+        avatar: u.avatar || '',
+        mutualConnections: (index + 2) * 3 % 17,
+        status
+      };
+    });
+    res.json(formattedConnections);
+  } catch (err) {
+    res.json(db.connections);
+  }
 });
 
-app.post("/api/connections/:id/action", (req, res) => {
+app.post("/api/connections/:id/action", async (req, res) => {
   const { id } = req.params;
-  const { action } = req.body; // 'connect' (outgoing), 'accept' (incoming), 'disconnect', 'reject'
-  const conn = db.connections.find(c => c.id === id);
-  if (conn) {
-    if (action === 'connect') {
-      conn.status = 'PendingOutgoing';
-    } else if (action === 'accept') {
-      conn.status = 'Connected';
-      db.currentUser.connectionsCount += 1;
-      // Add notification for confirmation
-      db.notifications.unshift({
-        id: `notif_${Date.now()}`,
-        type: 'connection_accept',
-        senderName: conn.fullName,
-        senderAvatar: conn.avatar,
-        message: "accepted your connection request.",
-        createdAt: new Date().toISOString(),
-        isRead: false
-      });
-    } else if (action === 'reject' || action === 'disconnect') {
-      if (conn.status === 'Connected') {
-        db.currentUser.connectionsCount = Math.max(0, db.currentUser.connectionsCount - 1);
+  const { action } = req.body;
+  const currentUserId = "user_sarah_tan";
+
+  try {
+    let targetUserId = id;
+    let existingConn = null;
+
+    if (id.startsWith('mock_conn_id_')) {
+      targetUserId = id.replace('mock_conn_id_', '');
+    } else {
+      existingConn = await prisma.connection.findUnique({ where: { id } });
+      if (existingConn) {
+        targetUserId = existingConn.senderId === currentUserId ? existingConn.receiverId : existingConn.senderId;
       }
-      conn.status = 'None';
     }
-    return res.json({ success: true, connection: conn });
+
+    if (!existingConn) {
+      existingConn = await prisma.connection.findFirst({
+        where: {
+          OR: [
+            { senderId: currentUserId, receiverId: targetUserId },
+            { senderId: targetUserId, receiverId: currentUserId }
+          ]
+        }
+      });
+    }
+
+    const otherUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!otherUser) return res.status(404).json({ error: "User not found" });
+
+    let resultConn = null;
+
+    if (action === 'connect') {
+      if (!existingConn) {
+        resultConn = await prisma.connection.create({
+          data: {
+            senderId: currentUserId,
+            receiverId: targetUserId,
+            status: "PENDING"
+          }
+        });
+      } else {
+        resultConn = existingConn;
+      }
+    } else if (action === 'accept') {
+      if (existingConn) {
+        resultConn = await prisma.connection.update({
+          where: { id: existingConn.id },
+          data: { status: "ACCEPTED" }
+        });
+
+        await prisma.notification.create({
+          data: {
+            userId: currentUserId,
+            type: 'connection_accept',
+            senderName: otherUser.fullName,
+            senderAvatar: otherUser.avatar || '',
+            message: "accepted your connection request.",
+            isRead: false
+          }
+        });
+      }
+    } else if (action === 'reject' || action === 'disconnect') {
+      if (existingConn) {
+        await prisma.connection.delete({ where: { id: existingConn.id } });
+      }
+    }
+
+    res.json({
+      success: true,
+      connection: {
+        id: resultConn?.id || `mock_conn_id_${targetUserId}`,
+        userId: targetUserId,
+        fullName: otherUser.fullName,
+        headline: otherUser.headline,
+        avatar: otherUser.avatar || '',
+        mutualConnections: 14,
+        status: action === 'connect' ? 'PendingOutgoing' : (action === 'accept' ? 'Connected' : 'None')
+      }
+    });
+  } catch (err) {
+    const conn = db.connections.find(c => c.id === id);
+    if (conn) {
+      if (action === 'connect') {
+        conn.status = 'PendingOutgoing';
+      } else if (action === 'accept') {
+        conn.status = 'Connected';
+        db.currentUser.connectionsCount += 1;
+        db.notifications.unshift({
+          id: `notif_${Date.now()}`,
+          type: 'connection_accept',
+          senderName: conn.fullName,
+          senderAvatar: conn.avatar,
+          message: "accepted your connection request.",
+          createdAt: new Date().toISOString(),
+          isRead: false
+        });
+      } else if (action === 'reject' || action === 'disconnect') {
+        if (conn.status === 'Connected') {
+          db.currentUser.connectionsCount = Math.max(0, db.currentUser.connectionsCount - 1);
+        }
+        conn.status = 'None';
+      }
+      return res.json({ success: true, connection: conn });
+    }
+    res.status(404).json({ error: "Contact not found" });
   }
-  res.status(404).json({ error: "Contact not found" });
 });
 
 // Job Board Portal Routes
-app.get("/api/jobs", (req, res) => {
-  res.json(db.jobs);
+app.get("/api/jobs", async (req, res) => {
+  try {
+    const jobs = await prisma.job.findMany({
+      include: {
+        company: true,
+        applications: {
+          where: { userId: "user_sarah_tan" }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const formattedJobs = jobs.map(j => ({
+      id: j.id,
+      title: j.title,
+      companyName: j.company.name,
+      companyLogo: j.company.logo,
+      location: j.location,
+      type: j.type,
+      salaryRange: j.salaryRange,
+      experienceLevel: j.experienceLevel,
+      description: j.description,
+      requirements: j.requirements,
+      skillsRequired: j.skillsRequired,
+      createdAt: j.createdAt.toISOString(),
+      applicantsCount: j.applications.length + 15,
+      hasApplied: j.applications.length > 0,
+      status: j.applications[0]?.status === 'APPLIED' ? 'Applied' : undefined
+    }));
+    res.json(formattedJobs);
+  } catch (err) {
+    res.json(db.jobs);
+  }
 });
 
-app.post("/api/jobs/:id/apply", (req, res) => {
+app.post("/api/jobs/:id/apply", async (req, res) => {
   const { id } = req.params;
-  const job = db.jobs.find(j => j.id === id);
-  if (job) {
-    job.hasApplied = true;
-    job.applicantsCount += 1;
-    job.status = 'Applied';
-    return res.json({ success: true, job });
+  const userId = "user_sarah_tan";
+  try {
+    await prisma.jobApplication.upsert({
+      where: {
+        jobId_userId: { jobId: id, userId }
+      },
+      update: { status: "APPLIED" },
+      create: { jobId: id, userId, status: "APPLIED" }
+    });
+
+    const job = await prisma.job.findUnique({
+      where: { id },
+      include: {
+        company: true,
+        applications: { where: { userId } }
+      }
+    });
+
+    if (!job) return res.status(404).json({ error: "Job not found" });
+
+    res.json({
+      success: true,
+      job: {
+        id: job.id,
+        title: job.title,
+        companyName: job.company.name,
+        companyLogo: job.company.logo,
+        location: job.location,
+        type: job.type,
+        salaryRange: job.salaryRange,
+        experienceLevel: job.experienceLevel,
+        description: job.description,
+        requirements: job.requirements,
+        skillsRequired: job.skillsRequired,
+        createdAt: job.createdAt.toISOString(),
+        applicantsCount: job.applications.length + 15,
+        hasApplied: true,
+        status: 'Applied'
+      }
+    });
+  } catch (err) {
+    const job = db.jobs.find(j => j.id === id);
+    if (job) {
+      job.hasApplied = true;
+      job.applicantsCount += 1;
+      job.status = 'Applied';
+      return res.json({ success: true, job });
+    }
+    res.status(404).json({ error: "Job opening not found" });
   }
-  res.status(404).json({ error: "Job opening not found" });
 });
 
 // Direct Messages Chat Routes
-app.get("/api/messages", (req, res) => {
-  res.json(db.messages);
+app.get("/api/messages", async (req, res) => {
+  try {
+    const messages = await prisma.message.findMany({
+      where: {
+        OR: [
+          { senderId: "user_sarah_tan" },
+          { recipientId: "user_sarah_tan" }
+        ]
+      },
+      orderBy: { timestamp: 'asc' }
+    });
+
+    const formattedMessages = messages.map(m => ({
+      id: m.id,
+      senderId: m.senderId,
+      recipientId: m.recipientId,
+      content: m.content,
+      timestamp: m.timestamp.toISOString(),
+      isRead: m.isRead
+    }));
+    res.json(formattedMessages);
+  } catch (err) {
+    res.json(db.messages);
+  }
 });
 
-app.post("/api/messages/send", (req, res) => {
+app.post("/api/messages/send", async (req, res) => {
   const { recipientId, content, imageUrl, fileName } = req.body;
-  const newMsg = {
-    id: `msg_${Date.now()}`,
-    senderId: db.currentUser.id,
-    recipientId,
-    content,
-    imageUrl: imageUrl || undefined,
-    fileName: fileName || undefined,
-    timestamp: new Date().toISOString(),
-    isRead: false
-  };
-  db.messages.push(newMsg);
+  const currentUserId = "user_sarah_tan";
 
-  // Auto-respond simulation if messaging a contact to provide high-fidelity interactive chat feeling!
-  if (recipientId === 'user_daniel_lim') {
-    setTimeout(() => {
-      const respMsg = {
-        id: `msg_auto_${Date.now()}`,
-        senderId: 'user_daniel_lim',
-        recipientId: db.currentUser.id,
-        content: `Hi ${db.currentUser.fullName}! Thanks for the message. I am currently reviewing our engineering roadmap. Let's touch base on Monday! Meanwhile, have you tried optimizing your CV with our CareerVerse AI Career Coach? It has an incredible ATS scanner.`,
-        timestamp: new Date(Date.now() + 1500).toISOString(),
-        isRead: false
-      };
-      db.messages.push(respMsg);
-      db.notifications.unshift({
-        id: `notif_auto_${Date.now()}`,
-        type: 'message',
-        senderName: "Daniel Lim",
-        senderAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
-        message: "sent you a reply regarding your inquiry.",
-        createdAt: new Date().toISOString(),
-        isRead: false
-      });
-    }, 4000);
+  try {
+    const newMsg = await prisma.message.create({
+      data: {
+        senderId: currentUserId,
+        recipientId,
+        content
+      }
+    });
+
+    if (recipientId === 'user_daniel_lim') {
+      setTimeout(async () => {
+        try {
+          await prisma.message.create({
+            data: {
+              senderId: 'user_daniel_lim',
+              recipientId: currentUserId,
+              content: `Hi Sarah! Thanks for the message. I am currently reviewing our engineering roadmap. Let's touch base on Monday! Meanwhile, have you tried optimizing your CV with our CareerVerse AI Career Coach? It has an incredible ATS scanner.`
+            }
+          });
+
+          await prisma.notification.create({
+            data: {
+              userId: currentUserId,
+              type: 'message',
+              senderName: "Daniel Lim",
+              senderAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
+              message: "sent you a reply regarding your inquiry.",
+              isRead: false
+            }
+          });
+        } catch (e) {
+          console.error("Auto response failed", e);
+        }
+      }, 4000);
+    }
+
+    res.json({
+      success: true,
+      message: {
+        id: newMsg.id,
+        senderId: newMsg.senderId,
+        recipientId: newMsg.recipientId,
+        content: newMsg.content,
+        timestamp: newMsg.timestamp.toISOString(),
+        isRead: newMsg.isRead
+      }
+    });
+  } catch (err) {
+    const newMsg = {
+      id: `msg_${Date.now()}`,
+      senderId: db.currentUser.id,
+      recipientId,
+      content,
+      imageUrl: imageUrl || undefined,
+      fileName: fileName || undefined,
+      timestamp: new Date().toISOString(),
+      isRead: false
+    };
+    db.messages.push(newMsg);
+
+    if (recipientId === 'user_daniel_lim') {
+      setTimeout(() => {
+        const respMsg = {
+          id: `msg_auto_${Date.now()}`,
+          senderId: 'user_daniel_lim',
+          recipientId: db.currentUser.id,
+          content: `Hi ${db.currentUser.fullName}! Thanks for the message. I am currently reviewing our engineering roadmap. Let's touch base on Monday! Meanwhile, have you tried optimizing your CV with our CareerVerse AI Career Coach? It has an incredible ATS scanner.`,
+          timestamp: new Date(Date.now() + 1500).toISOString(),
+          isRead: false
+        };
+        db.messages.push(respMsg);
+        db.notifications.unshift({
+          id: `notif_auto_${Date.now()}`,
+          type: 'message',
+          senderName: "Daniel Lim",
+          senderAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
+          message: "sent you a reply regarding your inquiry.",
+          createdAt: new Date().toISOString(),
+          isRead: false
+        });
+      }, 4000);
+    }
+
+    res.json({ success: true, message: newMsg });
   }
-
-  res.json({ success: true, message: newMsg });
 });
 
 // Live Notifications
-app.get("/api/notifications", (req, res) => {
-  res.json(db.notifications);
+app.get("/api/notifications", async (req, res) => {
+  try {
+    const notifications = await prisma.notification.findMany({
+      where: { userId: "user_sarah_tan" },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const formattedNotifications = notifications.map(n => ({
+      id: n.id,
+      type: n.type,
+      senderName: n.senderName,
+      senderAvatar: n.senderAvatar,
+      message: n.message,
+      targetId: n.targetId || undefined,
+      createdAt: n.createdAt.toISOString(),
+      isRead: n.isRead
+    }));
+    res.json(formattedNotifications);
+  } catch (err) {
+    res.json(db.notifications);
+  }
 });
 
-app.post("/api/notifications/read-all", (req, res) => {
-  db.notifications.forEach(n => n.isRead = true);
-  res.json({ success: true });
+app.post("/api/notifications/read-all", async (req, res) => {
+  try {
+    await prisma.notification.updateMany({
+      where: { userId: "user_sarah_tan" },
+      data: { isRead: true }
+    });
+    res.json({ success: true });
+  } catch (err) {
+    db.notifications.forEach(n => n.isRead = true);
+    res.json({ success: true });
+  }
 });
 
 // Interactive Prisma Schema Developer Route
 app.get("/api/dev/prisma", (req, res) => {
-  res.json({ schema: prismaSchemaCode });
+  try {
+    const schemaPath = path.join(process.cwd(), 'prisma', 'schema.prisma');
+    if (fs.existsSync(schemaPath)) {
+      const schema = fs.readFileSync(schemaPath, 'utf-8');
+      return res.json({ schema });
+    }
+    res.json({ schema: prismaSchemaCode });
+  } catch (err) {
+    res.json({ schema: prismaSchemaCode });
+  }
 });
 
 // ==========================================
@@ -1043,4 +1633,10 @@ async function startServer() {
   });
 }
 
-startServer();
+// Export app for serverless platforms like Vercel
+export default app;
+
+// Only launch the continuous server locally if not in Vercel environment
+if (!process.env.VERCEL) {
+  startServer();
+}
