@@ -1,0 +1,237 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Repurposing Indigo to Tuscan Terracotta & Sunset Clay (Unique Artisan Warm Palette) */
+  --color-indigo-50: #fefcfb;
+  --color-indigo-100: #fdf5f2;
+  --color-indigo-200: #faebd6;
+  --color-indigo-300: #f5d4be;
+  --color-indigo-400: #e9ab8f;
+  --color-indigo-500: #db835e;
+  --color-indigo-600: #c15b3c;
+  --color-indigo-700: #a14126;
+  --color-indigo-800: #812f1b;
+  --color-indigo-900: #622212;
+  --color-indigo-950: #380e05;
+
+  /* Repurposing Emerald to Mosswood Green & Sage Spruce */
+  --color-emerald-50: #f4f6f4;
+  --color-emerald-100: #e5eae5;
+  --color-emerald-200: #cbdec9;
+  --color-emerald-300: #a5bda2;
+  --color-emerald-400: #7a9c77;
+  --color-emerald-500: #587d55;
+  --color-emerald-600: #426140;
+  --color-emerald-700: #354d33;
+  --color-emerald-800: #293b28;
+  --color-emerald-900: #212f20;
+  --color-emerald-950: #0f170f;
+}
+
+:root {
+  /* Dark mode variables - Kyoto Ink Obsidian */
+  --bg-main: #0a0a0b; 
+  --grid-color: rgba(219, 131, 94, 0.035); /* Sandstone golden dust */
+  --bg-grid-image: radial-gradient(var(--grid-color) 1.5px, transparent 1.5px);
+  --bg-card: #111113; 
+  --bg-sidebar: #0a0a0b;
+  --bg-input: #17171a;
+  --border-main: #1e1e21;
+  --border-input: #2a2a2f;
+  --text-main: #dfded9;
+  --text-muted: #8d8b85;
+  --text-white-or-dark: #faf9f6;
+  --bg-active-tab: #1b1b1f;
+  
+  /* Additional customized palette variables for high-end feel */
+  --accent-olive: #587d55;
+  --accent-ochre: #d4a373;
+  --accent-terracotta: #c15b3c;
+}
+
+.light-theme {
+  /* Light mode variables - Oatmeal Linen Silk */
+  --bg-main: #FAF8F5; 
+  --grid-color: rgba(193, 91, 60, 0.05); /* Soft Tuscan Terracotta dust */
+  --bg-grid-image: radial-gradient(var(--grid-color) 1.5px, transparent 1.5px);
+  --bg-card: #ffffff;
+  --bg-sidebar: #f5f2eb; 
+  --bg-input: #eeeae2;
+  --border-main: #e2dacd;
+  --border-input: #d4caa2;
+  --text-main: #2b2927; 
+  --text-muted: #797168;
+  --text-white-or-dark: #1b1816;
+  --bg-active-tab: #ebdccf;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-main);
+    background-image: var(--bg-grid-image);
+    background-size: 26px 26px;
+    color: var(--text-main);
+    transition: background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), color 0.25s ease;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Exquisite Typographic Headings and Accents globally */
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.025em;
+  }
+}
+
+/* Custom Utility classes that map to luxury variables */
+.bg-sleek-main {
+  background-color: var(--bg-main);
+  background-image: var(--bg-grid-image);
+  background-size: 26px 26px;
+  transition: background-color 0.25s ease;
+}
+
+.bg-sleek-card {
+  background-color: var(--bg-card);
+  border-radius: 16px;
+  /* Premium Asymmetric Geometry for distinct architectural vibe */
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 4px 20px -3px rgba(0, 0, 0, 0.4), inset 0 1px 0px 0px rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-main);
+  transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
+}
+
+.light-theme .bg-sleek-card {
+  box-shadow: 0 6px 18px -4px rgba(115, 100, 80, 0.06), inset 0 1px 0px 0px rgba(255, 255, 255, 0.85);
+  border: 1px solid #ebdccf;
+}
+
+.bg-sleek-card:hover {
+  /* Subtle physical elevation feedback */
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0px 0px rgba(255, 255, 255, 0.07);
+}
+
+.light-theme .bg-sleek-card:hover {
+  box-shadow: 0 10px 22px -5px rgba(115, 100, 80, 0.09), inset 0 1px 0px 0px rgba(255, 255, 255, 0.95);
+}
+
+.bg-sleek-sidebar {
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border-main);
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.light-theme .bg-sleek-sidebar {
+  border-right: 1px solid #ecc9b9;
+}
+
+.bg-sleek-input {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
+}
+
+.bg-sleek-input:focus {
+  border-color: var(--accent-terracotta);
+  box-shadow: 0 0 0 2px rgba(193, 91, 60, 0.15);
+}
+
+.border-sleek-main {
+  border-color: var(--border-main);
+  transition: border-color 0.25s ease;
+}
+
+.light-theme .border-sleek-main {
+  border-color: #ebdccf;
+}
+
+.border-sleek-input {
+  border-color: var(--border-input);
+  transition: border-color 0.25s ease;
+}
+
+.light-theme .border-sleek-input {
+  border-color: #dcd4c8;
+}
+
+.text-sleek-main {
+  color: var(--text-main);
+  transition: color 0.25s ease;
+}
+
+.text-sleek-muted {
+  color: var(--text-muted);
+  transition: color 0.25s ease;
+}
+
+.text-sleek-heading {
+  color: var(--text-white-or-dark);
+  transition: color 0.25s ease;
+}
+
+.bg-sleek-active {
+  background-color: var(--bg-active-tab);
+  border-left: 2px solid var(--accent-terracotta);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Custom interactive button physics (Craft Look) */
+button {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+button:active {
+  transform: scale(0.97) translateY(1px);
+}
+
+/* Custom scrollbar - Kyoto Walnut Stream */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-main);
+  border-radius: 99px;
+  border: 2px solid var(--bg-main);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Double-ruled ribbon indicator classes */
+.architect-accent {
+  position: relative;
+}
+.architect-accent::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 32px;
+  height: 2px;
+  background: var(--accent-terracotta);
+}
+
+.architect-accent-double {
+  position: relative;
+}
+.architect-accent-double::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 48px;
+  height: 2px;
+  background: var(--accent-terracotta);
+  box-shadow: 0 4px 0 0 var(--accent-olive);
+}

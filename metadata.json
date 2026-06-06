@@ -1,0 +1,6 @@
+{
+  "name": "CareerVerse",
+  "description": "AI-powered professional networking platform merging modern portfolio visualizers, job portals, social feeds, and instant AI career coaching.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
