@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
-import prisma from "../src/lib/prisma";
+import prisma from "./prisma.js";
 import fs from "fs";
 
 dotenv.config();
